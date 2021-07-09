@@ -8,7 +8,7 @@ function print_tips
     echo "(3) 复制单节点zktube，多开节点"
     echo "(4) 重启zktube节点（官方升级后，重启即可升级为最新版）"
     echo "(5) 停止并删除zktube节点"
-    echo "(6) 停止并删除所有docer container volume image"
+    echo "(6) 停止并删除所有docer container network image"
     echo "(Q/q) 退出"
     echo '========================================================='
 }
@@ -52,7 +52,10 @@ function zkt_loop
 {
     echo "请输入要搭建的zkt节点数量"
     read tCnt
-    for ((i=2; i<=tCnt; i ++))
+    zCnt=`ls -l /zktdata|grep "zkt"|wc -l`
+    tCnt=$(($tCnt + $zCnt))
+    zCnt=$(($zCnt + 1))
+    for ((i=zCnt; i<=tCnt; i ++))
     do
     if [ ! -f /zktdata/zkt${i} ]; then
         cp -r /zktdata/zkt1 /zktdata/zkt${i}
@@ -61,7 +64,7 @@ function zkt_loop
         echo '========================================================='
         echo '查看进程：docker ps'
         echo "存放目录：/zktdata/zkt${i} "
-        echo "查看日志：docker logs -f zkt${i} _zktube-prover_1"
+        echo "查看日志：docker logs -f zkt${i}_zktube-prover_1"
         echo '============================================== Aven7 ====' 
     else 
         echo '========================================================='
@@ -73,16 +76,16 @@ function zkt_loop
 
 function zkt_rm
 {
-    tCnt=`ls -l|grep "zkt"|wc -l`
+    tCnt=`ls -l /zktdata|grep "zkt"|wc -l`
     for ((i=1; i<=tCnt; i ++))    
     do
-    if [ ! -f /zktdata/zkt${i} ]; then
-        cd /zktdata/zkt${i}
-        docker-compose down
-        echo '========================================================='
-        echo "此zkt${i}节点已删除"
-        echo '========================================================='
-    fi
+        if [ ! -f /zktdata/zkt${i} ]; then
+            cd /zktdata/zkt${i}
+            docker-compose down
+            echo '========================================================='
+            echo "此zkt${i}节点已删除"
+            echo '========================================================='
+        fi
     done
     rm -rf /zktdata
     docker rmi zktubelabs/zktube-prover
@@ -90,17 +93,24 @@ function zkt_rm
 
 function zkt_restart
 {
-    tCnt=`ls -l|grep "zkt"|wc -l`
+    tCnt=`ls -l /zktdata|grep "zkt"|wc -l`
     for ((i=1; i<=tCnt; i ++))    
     do
-    if [ ! -f /zktdata/zkt${i} ]; then
-        cd /zktdata/zkt${i}
-        docker-compose down
-        docker-compose up -d
-        echo '========================================================='
-        echo "zkt${i}节点已重启"
-        echo '========================================================='
-    fi
+        if [ ! -f /zktdata/zkt${i} ]; then
+            cd /zktdata/zkt${i}
+            docker-compose down
+            echo '========================================================='
+            echo "zkt${i}节点已停止"
+            echo '========================================================='
+        fi
+        docker rmi zktubelabs/zktube-prover
+        if [ ! -f /zktdata/zkt${i} ]; then
+            cd /zktdata/zkt${i}
+            docker-compose up -d
+            echo '========================================================='
+            echo "zkt${i}节点已重启"
+            echo '========================================================='
+        fi
     done
 }
 
@@ -111,17 +121,21 @@ function zkt_docker_stop
     docker stop $(docker container ls -aq)
     echo '删除所有docker container'
     docker rm $(docker container ls -aq)
-    echo '删除所有docker volume'
-    docker volume rm $(docker volume ls -aq)
     echo '删除所有docker image'
     docker rmi $(docker image ls -aq)
+    echo '删除所有zkt network'
+    tCnt=`ls -l /zktdata|grep "zkt"|wc -l`
+    for ((i=1; i<=tCnt; i ++))    
+    do
+        docker network rm "zkt${i}_default"
+    done
     echo '============================================== Aven7 ====' 
 }
 
 while true
 do
     print_tips
-    read -p "请输入你的选项(1|2|3|4|5|q|Q):" choice
+    read -p "请输入你的选项(1|2|3|4|5|6|q|Q):" choice
  
     case $choice in
         1)
@@ -141,11 +155,14 @@ do
         5)
             zkt_rm
             ;;
+        6)
+            zkt_docker_stop
+            ;;
         q|Q)
             exit
             ;;
         *)
-            echo "Error,input only in {1|2|3|4|5|q|Q}"
+            echo "Error,input only in {1|2|3|4|5|6|q|Q}"
             ;;
     esac
 done
